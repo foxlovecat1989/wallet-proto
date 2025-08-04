@@ -27,6 +27,12 @@ go.work
 # Build directory
 build/
 
+
+
+# Test script temporary files
+test-*.log
+*.test.log
+
 # Generated protobuf files (optional - uncomment if you want to ignore them)
 # pb/
 
@@ -101,11 +107,7 @@ go-test-cache/
 # Go workspace and module files
 go.work.sum
 
-# Air live reload
-tmp/
 
-# Development tools
-.air.toml
 
 # Migration files (if you want to ignore them)
 # db/migrations/*.sql

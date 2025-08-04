@@ -29,7 +29,7 @@ func NewRefreshToken(userID uuid.UUID, tokenHash string, expiresAt int64) (*Refr
 		return nil, errs.ErrInvalidToken
 	}
 
-	if expiresAt <= time.Now().Unix() {
+	if expiresAt <= time.Now().UnixMilli() {
 		return nil, errs.ErrTokenExpired
 	}
 
@@ -39,8 +39,8 @@ func NewRefreshToken(userID uuid.UUID, tokenHash string, expiresAt int64) (*Refr
 		Token:     tokenHash,
 		ExpiresAt: expiresAt,
 		IsRevoked: false,
-		CreatedAt: time.Now().Unix(),
-		UpdatedAt: time.Now().Unix(),
+		CreatedAt: time.Now().UnixMilli(),
+		UpdatedAt: time.Now().UnixMilli(),
 	}, nil
 }
 
@@ -62,7 +62,7 @@ func (rt *RefreshToken) IsValid() error {
 		return errs.ErrTokenRevoked
 	}
 
-	if rt.ExpiresAt <= time.Now().Unix() {
+	if rt.ExpiresAt <= time.Now().UnixMilli() {
 		return errs.ErrTokenExpired
 	}
 

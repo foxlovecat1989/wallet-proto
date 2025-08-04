@@ -75,7 +75,8 @@ func NewUserWithPassword(email, password, username string) (*User, error) {
 		return nil, err
 	}
 
-	passwordHash, err := NewPasswordHash(string(pwd))
+	// Hash the password
+	passwordHash, err := NewPasswordHashFromPlain(string(pwd))
 	if err != nil {
 		return nil, err
 	}

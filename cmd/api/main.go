@@ -9,62 +9,90 @@ import (
 	"syscall"
 	"time"
 
+	pb "user-svc/api/proto"
+	"user-svc/internal/app/config"
+	"user-svc/internal/app/handler"
+	"user-svc/internal/app/repository"
+	"user-svc/internal/app/service"
+	"user-svc/internal/db"
+	"user-svc/pkg/utils/crypt/token"
+	grpcutils "user-svc/pkg/utils/grpc"
+	logutils "user-svc/pkg/utils/log"
+	"user-svc/pkg/utils/tx"
+
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
 
 func main() {
-	// TODO: Load configuration
-	// cfg, err := app.LoadConfig("configs/config.yaml")
-	// if err != nil {
-	// 	log.Fatalf("Failed to load config: %v", err)
-	// }
+	// Initialize logger
+	if err := logutils.InitLogger(); err != nil {
+		log.Fatalf("Failed to initialize logger: %v", err)
+	}
+	logger := logutils.GetLogger()
 
-	// TODO: Connect to database
-	// dbConn, err := db.NewConnection(cfg.Database)
-	// if err != nil {
-	// 	log.Fatalf("Failed to connect to database: %v", err)
-	// }
+	// Load configuration
+	cfg, err := config.LoadConfig("config.yaml")
+	if err != nil {
+		logger.Fatalf("Failed to load configuration: %v", err)
+	}
 
-	// TODO: Initialize database schema
-	// log.Println("Initializing database schema...")
-	// if err := db.InitDatabase(dbConn.DB.DB); err != nil {
-	// 	log.Fatalf("Failed to initialize database schema: %v", err)
-	// }
+	// Validate configuration
+	if err := cfg.Validate(); err != nil {
+		logger.Fatalf("Configuration validation failed: %v", err)
+	}
 
-	// Initialize repositories
-	// userRepo := db.NewUserRepository(dbConn.DB)
-	// refreshTokenRepo := db.NewRefreshTokenRepository(dbConn.DB)
+	// Get interceptors for exception handling
+	unaryInterceptors := grpcutils.GetUnaryInterceptors(logger)
+	streamInterceptors := grpcutils.GetStreamInterceptors(logger)
 
-	// Initialize token maker
-	// tokenMaker := utils.NewJWTTokenMaker(cfg.Security.JWT.SecretKey)
+	// Create gRPC server with interceptors
+	serverOptions := append(unaryInterceptors, streamInterceptors...)
+	grpcServer := grpc.NewServer(serverOptions...)
 
-	// txManager := utils.NewTransactionManager(dbConn.DB)
+	db, err := db.NewStore(&cfg.Database)
+	if err != nil {
+		logger.Fatalf("Failed to create database store: %v", err)
+	}
+	userRepo := repository.NewUserRepository(db)
+	refreshTokenRepo := repository.NewRefreshTokenRepository(db)
+	txManager := tx.NewTransactionManager(db.DB())
+	tokenMaker := token.NewJWTTokenMaker(cfg.JWT.SecretKey)
 
-	// Initialize gRPC server with error handling
-	// userServer := app.NewUserHandler(nil) // TODO: Implement proper service
-
-	// Create gRPC server
-	grpcServer := grpc.NewServer()
+	userService := service.NewUserService(
+		cfg,
+		userRepo,
+		refreshTokenRepo,
+		txManager,
+		tokenMaker,
+	)
+	userHandler := handler.NewUserHandler(userService)
 
 	// Register services
-	// pb.RegisterUserServiceServer(grpcServer, userServer)
+	pb.RegisterUserServiceServer(grpcServer, userHandler)
 
 	// Enable reflection for development
 	reflection.Register(grpcServer)
 
 	// Start gRPC server
-	grpcAddr := ":50051" // TODO: Use config
+	grpcAddr := cfg.Server.GetServerAddr()
 	lis, err := net.Listen("tcp", grpcAddr)
 	if err != nil {
-		log.Fatalf("Failed to listen: %v", err)
+		logger.Fatalf("Failed to listen: %v", err)
 	}
 
-	log.Printf("gRPC server listening on %s", grpcAddr)
-	log.Printf("Server configuration:")
-	log.Printf("  - Database: TODO")
-	log.Printf("  - Token Duration: TODO")
-	log.Printf("  - Reflection: enabled")
+	logger.WithFields(logrus.Fields{
+		"address":              grpcAddr,
+		"port":                 cfg.Server.Port,
+		"host":                 cfg.Server.Host,
+		"db_host":              cfg.Database.Host,
+		"db_port":              cfg.Database.Port,
+		"jwt_access_duration":  cfg.JWT.AccessTokenDuration,
+		"jwt_refresh_duration": cfg.JWT.RefreshTokenDuration,
+		"log_level":            cfg.Log.Level,
+		"reflection":           "enabled",
+	}).Info("gRPC server starting")
 
 	// Create a channel to receive OS signals
 	sigChan := make(chan os.Signal, 1)
@@ -73,31 +101,23 @@ func main() {
 	// Start the server in a goroutine
 	go func() {
 		if err := grpcServer.Serve(lis); err != nil {
-			log.Printf("Failed to serve: %v", err)
+			logger.WithError(err).Error("Failed to serve gRPC server")
 		}
 	}()
 
 	// Wait for shutdown signal
 	sig := <-sigChan
-	log.Printf("Received signal %v, initiating graceful shutdown...", sig)
+	logger.WithField("signal", sig).Info("Received shutdown signal, initiating graceful shutdown")
 
 	// Create a context with timeout for graceful shutdown
-	shutdownTimeout := 30 * time.Second // TODO: Use config
+	shutdownTimeout := 30 * time.Second
 	_, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 
 	// Gracefully stop the gRPC server
-	log.Println("Stopping gRPC server...")
+	logger.Info("Stopping gRPC server...")
 	grpcServer.GracefulStop()
-	log.Println("gRPC server stopped")
+	logger.Info("gRPC server stopped")
 
-	// TODO: Close database connection
-	// log.Println("Closing database connection...")
-	// if err := dbConn.Close(); err != nil {
-	// 	log.Printf("Error closing database connection: %v", err)
-	// } else {
-	// 	log.Println("Database connection closed")
-	// }
-
-	log.Println("Graceful shutdown completed")
+	logger.Info("Graceful shutdown completed")
 }

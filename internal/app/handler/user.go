@@ -1,10 +1,10 @@
-package app
+package handler
 
 import (
 	"context"
 
-	"user-svc/internal/app/domains/dto"
 	pb "user-svc/api/proto"
+	"user-svc/internal/app/domains/dto"
 )
 
 // UserHandler handles gRPC requests for user operations

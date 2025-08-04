@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 
+	"user-svc/internal/app/config"
+
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 )
@@ -40,7 +42,7 @@ type store struct {
 }
 
 // NewStore creates a new store
-func NewStore(cfg *DatabaseConfig) (Store, error) {
+func NewStore(cfg *config.DatabaseConfig) (Store, error) {
 	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 		cfg.Host,
 		cfg.Port,

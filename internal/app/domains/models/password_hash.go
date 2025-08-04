@@ -1,6 +1,9 @@
 package models
 
-import "user-svc/internal/app/domains/errs"
+import (
+	"user-svc/internal/app/domains/errs"
+	"user-svc/pkg/utils/crypt/password"
+)
 
 // PasswordHash represents a hashed password
 type PasswordHash string
@@ -12,6 +15,16 @@ func NewPasswordHash(hash string) (PasswordHash, error) {
 		return "", err
 	}
 	return ph, nil
+}
+
+// NewPasswordHashFromPlain creates a new PasswordHash from a plain text password
+func NewPasswordHashFromPlain(plainPassword string) (PasswordHash, error) {
+	hasher := password.DefaultHasher()
+	hashedPassword, err := hasher.HashPassword(plainPassword)
+	if err != nil {
+		return "", err
+	}
+	return PasswordHash(hashedPassword), nil
 }
 
 // Validate checks if the password hash is valid (non-empty)
@@ -28,6 +41,7 @@ func (ph PasswordHash) String() string {
 }
 
 // VerifyPassword checks if the password hash matches the provided password
-func (ph PasswordHash) VerifyPassword(password string) bool {
-	return ph.String() == password
+func (ph PasswordHash) VerifyPassword(plainPassword string) bool {
+	hasher := password.DefaultHasher()
+	return hasher.VerifyPassword(string(ph), plainPassword)
 }

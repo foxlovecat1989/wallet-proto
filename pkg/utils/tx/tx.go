@@ -7,6 +7,11 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
+// TransactionContextKey is the key used to store transaction in context
+type contextKey string
+
+const TransactionContextKey contextKey = "txctx"
+
 // TxWrapper wraps a database transaction and provides helper methods
 type TxWrapper struct {
 	tx *sqlx.Tx
@@ -22,34 +27,10 @@ func (tw *TxWrapper) GetTx() *sqlx.Tx {
 	return tw.tx
 }
 
-// Commit commits the transaction
-func (tw *TxWrapper) Commit() error {
-	return tw.tx.Commit()
-}
-
-// Rollback rolls back the transaction
-func (tw *TxWrapper) Rollback() error {
-	return tw.tx.Rollback()
-}
-
-// ExecContext executes a query with context
-func (tw *TxWrapper) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
-	return tw.tx.ExecContext(ctx, query, args...)
-}
-
-// NamedExecContext executes a named query with context
-func (tw *TxWrapper) NamedExecContext(ctx context.Context, query string, arg any) (sql.Result, error) {
-	return tw.tx.NamedExecContext(ctx, query, arg)
-}
-
-// GetContext gets a single row with context
-func (tw *TxWrapper) GetContext(ctx context.Context, dest any, query string, args ...any) error {
-	return tw.tx.GetContext(ctx, dest, query, args...)
-}
-
-// SelectContext selects multiple rows with context
-func (tw *TxWrapper) SelectContext(ctx context.Context, dest any, query string, args ...any) error {
-	return tw.tx.SelectContext(ctx, dest, query, args...)
+// GetTxFromContext retrieves a transaction from context
+func GetTxFromContext(ctx context.Context) (*sqlx.Tx, bool) {
+	tx, ok := ctx.Value(TransactionContextKey).(*sqlx.Tx)
+	return tx, ok
 }
 
 // TransactionManager manages database transactions
@@ -64,10 +45,14 @@ func NewTransactionManager(db *sqlx.DB) *TransactionManager {
 
 // WithTransaction executes a function within a database transaction
 func (tm *TransactionManager) WithTransaction(ctx context.Context, fn func(*TxWrapper) error) error {
-	opts := &sql.TxOptions{
+	return tm.WithTransactionOptions(ctx, fn, &sql.TxOptions{
 		Isolation: sql.LevelReadCommitted,
 		ReadOnly:  false,
-	}
+	})
+}
+
+// WithTransactionOptions executes a function within a database transaction with custom options
+func (tm *TransactionManager) WithTransactionOptions(ctx context.Context, fn func(*TxWrapper) error, opts *sql.TxOptions) error {
 	tx, err := tm.db.BeginTxx(ctx, opts)
 	if err != nil {
 		return err
@@ -75,18 +60,12 @@ func (tm *TransactionManager) WithTransaction(ctx context.Context, fn func(*TxWr
 
 	txWrapper := NewTxWrapper(tx)
 
-	// Ensure rollback on panic
-	defer func() {
-		if p := recover(); p != nil {
-			_ = tx.Rollback()
-			panic(p) // re-throw panic after rollback
-		}
-	}()
-
 	// Execute the function
 	if err := fn(txWrapper); err != nil {
 		// Rollback on error
 		if rbErr := tx.Rollback(); rbErr != nil {
+			// Log rollback error but return original error
+			// You might want to add logging here: log.Printf("rollback failed: %v", rbErr)
 			return err // return original error, not rollback error
 		}
 		return err
@@ -96,15 +75,33 @@ func (tm *TransactionManager) WithTransaction(ctx context.Context, fn func(*TxWr
 	return tx.Commit()
 }
 
-// WithTransactionResult executes a function within a database transaction and returns a result
-func (tm *TransactionManager) WithTransactionResult(ctx context.Context, fn func(*TxWrapper) (any, error)) (any, error) {
-	var result any
-
-	err := tm.WithTransaction(ctx, func(tx *TxWrapper) error {
-		var fnErr error
-		result, fnErr = fn(tx)
-		return fnErr
+// WithTransactionIsolation executes a function within a database transaction with specific isolation level
+func (tm *TransactionManager) WithTransactionIsolation(ctx context.Context, fn func(*TxWrapper) error, isolation sql.IsolationLevel) error {
+	return tm.WithTransactionOptions(ctx, fn, &sql.TxOptions{
+		Isolation: isolation,
+		ReadOnly:  false,
 	})
+}
 
-	return result, err
+// WithReadOnlyTransaction executes a function within a read-only database transaction
+func (tm *TransactionManager) WithReadOnlyTransaction(ctx context.Context, fn func(*TxWrapper) error) error {
+	return tm.WithTransactionOptions(ctx, fn, &sql.TxOptions{
+		Isolation: sql.LevelReadCommitted,
+		ReadOnly:  true,
+	})
+}
+
+// WithSerializableTransaction executes a function within a serializable transaction
+func (tm *TransactionManager) WithSerializableTransaction(ctx context.Context, fn func(*TxWrapper) error) error {
+	return tm.WithTransactionIsolation(ctx, fn, sql.LevelSerializable)
+}
+
+// WithRepeatableReadTransaction executes a function within a repeatable read transaction
+func (tm *TransactionManager) WithRepeatableReadTransaction(ctx context.Context, fn func(*TxWrapper) error) error {
+	return tm.WithTransactionIsolation(ctx, fn, sql.LevelRepeatableRead)
+}
+
+// WithReadUncommittedTransaction executes a function within a read uncommitted transaction
+func (tm *TransactionManager) WithReadUncommittedTransaction(ctx context.Context, fn func(*TxWrapper) error) error {
+	return tm.WithTransactionIsolation(ctx, fn, sql.LevelReadUncommitted)
 }

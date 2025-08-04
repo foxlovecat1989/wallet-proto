@@ -8,7 +8,8 @@ all: build
 # Build the application
 build:
 	@echo "Building user-svc..."
-	go build -o user-svc-api ./cmd/api
+	@mkdir -p bin
+	go build -o bin/user-svc-api ./cmd/api
 
 # Run tests
 test:
@@ -18,12 +19,33 @@ test:
 # Clean build artifacts
 clean:
 	@echo "Cleaning build artifacts..."
-	rm -f user-svc-api
+	rm -rf bin/
 
 # Run the application
 run: build
 	@echo "Running user-svc..."
-	./user-svc-api
+	./bin/user-svc-api
+
+# Run server (alias for run)
+server: run
+
+
+
+# Test all gRPC endpoints
+test-all:
+	@echo "Testing all gRPC endpoints..."
+	./scripts/test-all.sh
+
+# Development: start database and server
+dev:
+	@echo "Starting development environment..."
+	@echo "Starting PostgreSQL database..."
+	docker compose up postgres -d
+	@echo "Waiting for database to be ready..."
+	@sleep 5
+	@echo "Starting user service..."
+	@echo "Note: You may need to run with config file: ./bin/user-svc-api -config config.yaml"
+	$(MAKE) server
 
 # Setup proto (update submodule and generate files)
 proto:
@@ -39,6 +61,32 @@ proto:
 		proto/*.proto
 	@echo "Proto setup completed!"
 
+# Docker commands
+docker-build:
+	@echo "Building Docker image..."
+	docker build -f deployments/Dockerfile -t user-svc .
+	@echo "Docker image built successfully!"
+
+docker-run:
+	@echo "Running Docker container..."
+	docker run -p 50051:50051 --name user-svc-container user-svc
+
+docker-up:
+	@echo "Starting services with docker compose..."
+	docker compose up -d
+	@echo "Services started!"
+
+docker-down:
+	@echo "Stopping services with docker compose..."
+	docker compose down
+	@echo "Services stopped!"
+
+docker-clean:
+	@echo "Cleaning up docker resources..."
+	docker compose down -v --remove-orphans
+	docker system prune -f
+	@echo "Docker cleanup completed!"
+
 # Show help
 help:
 	@echo "Available targets:"
@@ -47,5 +95,13 @@ help:
 	@echo "  test         - Run tests"
 	@echo "  clean        - Clean build artifacts"
 	@echo "  run          - Build and run the application"
+	@echo "  server       - Run server (alias for run)"
+	@echo "  dev          - Start database and server for development"
+	@echo "  test-all     - Test all gRPC endpoints"
 	@echo "  proto        - Update submodule and generate proto files"
+	@echo "  docker-build - Build Docker image"
+	@echo "  docker-run   - Run Docker container"
+	@echo "  docker-up    - Start all services with docker-compose"
+	@echo "  docker-down  - Stop all services with docker-compose"
+	@echo "  docker-clean - Clean up docker volumes and containers"
 	@echo "  help         - Show this help message"

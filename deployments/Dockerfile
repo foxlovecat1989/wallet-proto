@@ -10,9 +10,6 @@ WORKDIR /app
 # Copy go mod files
 COPY go.mod go.sum ./
 
-# Copy pb directory for module replacement
-COPY pb/ ./pb/
-
 # Download dependencies
 RUN go mod download
 
@@ -20,7 +17,7 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o user-svc main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o user-svc ./cmd/api
 
 # Final stage
 FROM alpine:latest
@@ -38,8 +35,8 @@ WORKDIR /app
 # Copy binary from builder stage
 COPY --from=builder /app/user-svc .
 
-# Copy migration files
-COPY --from=builder /app/db/migrations ./db/migrations
+# Copy database initialization script
+COPY --from=builder /app/internal/db/init.sql ./db/
 
 # Change ownership to non-root user
 RUN chown -R appuser:appgroup /app
@@ -48,11 +45,11 @@ RUN chown -R appuser:appgroup /app
 USER appuser
 
 # Expose port
-EXPOSE 9090
+EXPOSE 50051
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD nc -z localhost 9090 || exit 1
+    CMD nc -z localhost 50051 || exit 1
 
 # Run the application
 CMD ["./user-svc"] 
