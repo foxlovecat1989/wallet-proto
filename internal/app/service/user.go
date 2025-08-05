@@ -3,12 +3,15 @@ package service
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"time"
 
 	"user-svc/internal/app/config"
 	"user-svc/internal/app/domains/dto"
 	"user-svc/internal/app/domains/errs"
+	"user-svc/internal/app/domains/events"
 	"user-svc/internal/app/domains/models"
+	"user-svc/internal/app/repository"
 	"user-svc/pkg/utils/crypt/token"
 	"user-svc/pkg/utils/log"
 	"user-svc/pkg/utils/tx"
@@ -38,13 +41,18 @@ type TxManager interface {
 	WithReadUncommittedTransaction(ctx context.Context, fn func(*tx.TxWrapper) error) error
 }
 
+type NotificationEventLogRepository interface {
+	Create(ctx context.Context, event *repository.NotificationEventLog) error
+}
+
 // UserService handles business logic for user operations
 type UserService struct {
-	config           *config.Config
-	userRepo         UserRepository
-	refreshTokenRepo RefreshTokenRepository
-	txManager        TxManager
-	tokenMaker       token.TokenMaker
+	config                   *config.Config
+	userRepo                 UserRepository
+	refreshTokenRepo         RefreshTokenRepository
+	txManager                TxManager
+	tokenMaker               token.TokenMaker
+	notificationEventLogRepo NotificationEventLogRepository
 }
 
 // NewUserService creates a new UserService instance
@@ -54,15 +62,17 @@ func NewUserService(
 	refreshTokenRepo RefreshTokenRepository,
 	txManager TxManager,
 	tokenMaker token.TokenMaker,
+	notificationEventLogRepo NotificationEventLogRepository,
 ) *UserService {
 	log.Info("Initializing UserService")
 
 	service := &UserService{
-		config:           config,
-		userRepo:         userRepo,
-		refreshTokenRepo: refreshTokenRepo,
-		txManager:        txManager,
-		tokenMaker:       tokenMaker,
+		config:                   config,
+		userRepo:                 userRepo,
+		refreshTokenRepo:         refreshTokenRepo,
+		txManager:                txManager,
+		tokenMaker:               tokenMaker,
+		notificationEventLogRepo: notificationEventLogRepo,
 	}
 
 	log.WithFields(logrus.Fields{
@@ -231,6 +241,27 @@ func (s *UserService) Login(ctx context.Context, req dto.LoginReq) (*dto.LoginRe
 		"email":    user.Email.String(),
 		"username": user.Username.String(),
 	}).Info("User login completed successfully")
+
+	payload, err := json.Marshal(dto.SendLoginNotificationParams{
+		UserID:   user.ID.String(),
+		Email:    user.Email.String(),
+		Username: user.Username.String(),
+		LoginAt:  time.Now(),
+	})
+	if err != nil {
+		logger.WithError(err).Error("Failed to marshal notification payload")
+		return nil, err
+	}
+
+	if err := s.notificationEventLogRepo.Create(ctx, &repository.NotificationEventLog{
+		ID:        uuid.New().String(),
+		EventName: string(events.LoginEventType),
+		Payload:   payload,
+		Status:    repository.NotificationEventLogStatusPending,
+	}); err != nil {
+		logger.WithError(err).Error("Failed to create notification event log")
+		return nil, err
+	}
 
 	return &dto.LoginResp{
 		User:         user,

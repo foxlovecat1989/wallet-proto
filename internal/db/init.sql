@@ -54,3 +54,23 @@ CREATE TRIGGER update_refresh_tokens_updated_at
     BEFORE UPDATE ON refresh_tokens 
     FOR EACH ROW 
     EXECUTE FUNCTION update_updated_at_column(); 
+
+
+-- Create a table for notification events
+CREATE TABLE IF NOT EXISTS notification_event_logs (
+    id UUID PRIMARY KEY NOT NULL,
+    event_name VARCHAR(255) NOT NULL,
+    payload JSONB NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+    created_at BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000),
+    updated_at BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
+);
+
+-- Create a trigger to automatically update the updated_at timestamp
+CREATE TRIGGER update_notification_event_logs_updated_at 
+    BEFORE UPDATE ON notification_event_logs 
+    FOR EACH ROW 
+    EXECUTE FUNCTION update_updated_at_column();
+
+
+CREATE INDEX IF NOT EXISTS idx_notification_event_logs_event_name_status ON notification_event_logs(event_name, status);

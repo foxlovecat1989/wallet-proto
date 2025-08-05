@@ -39,7 +39,7 @@ func (req RegisterReq) Validate() error {
 
 // RegisterResp represents a user registration response
 type RegisterResp struct {
-	User         *models.User 
+	User         *models.User
 	AccessToken  string
 	RefreshToken string
 }

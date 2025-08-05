@@ -15,6 +15,7 @@ type Config struct {
 	JWT      JWTConfig      `mapstructure:"jwt"`
 	Redis    RedisConfig    `mapstructure:"redis"`
 	Log      LogConfig      `mapstructure:"log"`
+	Worker   WorkerConfig   `mapstructure:"worker"`
 }
 
 // ServerConfig holds server configuration
@@ -55,6 +56,20 @@ type RedisConfig struct {
 type LogConfig struct {
 	Level  string `mapstructure:"level"`
 	Format string `mapstructure:"format"`
+}
+
+// WorkerConfig holds notification worker configuration
+type WorkerConfig struct {
+	Notification NotificationWorkerConfig `mapstructure:"notification"`
+}
+
+// NotificationWorkerConfig holds notification worker specific configuration
+type NotificationWorkerConfig struct {
+	Enabled     bool          `mapstructure:"enabled"`
+	Interval    time.Duration `mapstructure:"interval"`
+	MaxRetries  int           `mapstructure:"max_retries"`
+	BatchSize   int           `mapstructure:"batch_size"`
+	Concurrency int           `mapstructure:"concurrency"`
 }
 
 // LoadConfig loads configuration using Viper
@@ -116,6 +131,13 @@ func setDefaults(v *viper.Viper) {
 	// Log defaults
 	v.SetDefault("log.level", "info")
 	v.SetDefault("log.format", "json")
+
+	// Worker defaults
+	v.SetDefault("worker.notification.enabled", true)
+	v.SetDefault("worker.notification.interval", "10s")
+	v.SetDefault("worker.notification.max_retries", 5)
+	v.SetDefault("worker.notification.batch_size", 1000)
+	v.SetDefault("worker.notification.concurrency", 1)
 }
 
 // GetDSN returns the database connection string

@@ -13,11 +13,38 @@ A gRPC-based user authentication service with clean architecture, domain-driven 
 - **Transaction Management**: Clean transaction handling with configurable isolation levels
 - **gRPC API**: Protocol buffer definitions and gRPC server setup
 - **Clean Architecture**: Separation of concerns with internal packages
-- **Graceful Shutdown**: Proper service shutdown handling
+- **Graceful Shutdown**: Robust shutdown mechanism with context cancellation and timeout handling
 - **Exception Handling**: Comprehensive panic recovery and error handling system
 - **Code Quality**: Clean, maintainable code with no unused functions
 - **Error Handling**: Comprehensive customized error wrapper system with rich metadata
 - **Configuration Management**: Flexible configuration with environment variables and YAML
+- **Event-Driven Architecture**: Asynchronous notification system with event logging
+- **Background Workers**: Notification worker with graceful shutdown and concurrency control
+- **Redis Integration**: Asynq-based task queue for asynchronous processing
+- **Context Management**: Proper context propagation and cancellation throughout the application
+
+## 🔄 Graceful Shutdown
+
+The service implements a production-ready graceful shutdown mechanism that ensures data integrity and proper resource cleanup:
+
+### Key Capabilities
+
+- **Context Coordination**: Single application context coordinates shutdown across all components
+- **Signal Handling**: Responds to OS signals (SIGINT, SIGTERM) and server errors
+- **Timeout Protection**: 30-second graceful shutdown with force shutdown fallback
+- **Worker Management**: Notification worker processes remaining events before stopping
+- **Server Graceful Stop**: gRPC server stops accepting new connections gracefully
+- **Comprehensive Logging**: Detailed shutdown progress for monitoring and debugging
+
+### Shutdown Process
+
+1. **Trigger**: OS signal or server error initiates shutdown
+2. **Coordination**: Main context cancellation signals all components
+3. **Worker Cleanup**: Notification worker processes pending events
+4. **Server Stop**: gRPC server stops gracefully
+5. **Timeout Handling**: Force shutdown if graceful shutdown times out
+
+See [`docs/graceful-shutdown.md`](docs/graceful-shutdown.md) for detailed documentation.
 
 ## 🔧 Implementation Status
 
@@ -32,14 +59,19 @@ The service currently uses **REAL implementations** for all major components:
 - ✅ **Repositories**: REAL implementations with PostgreSQL database operations
 - ✅ **Database**: REAL PostgreSQL connection with full transaction support
 - ✅ **Token Management**: REAL JWT implementation with access and refresh tokens
+- ✅ **Event Logging**: Notification event log system with status tracking
+- ✅ **Background Workers**: Notification worker with graceful shutdown and concurrency control
+- ✅ **Task Queue**: Redis-based Asynq integration for async processing
+- ✅ **Graceful Shutdown**: Robust shutdown mechanism with context cancellation and timeout handling
 
-**Note**: The service is now fully functional with real database persistence, JWT token generation, comprehensive error handling, and panic recovery. All components are production-ready implementations.
+**Note**: The service is now fully functional with real database persistence, JWT token generation, comprehensive error handling, panic recovery, and an event-driven notification system. All components are production-ready implementations.
 
 ## 📋 Prerequisites
 
 - **Go 1.24.4** or later
 - **Protocol Buffers** compiler (protoc)
 - **PostgreSQL** database (for data persistence)
+- **Redis** database (for task queue and async processing)
 - **Make** (for build automation)
 
 ## 🛠️ Installation & Setup
@@ -71,16 +103,20 @@ make proto
 
 ### 4. Setup Database
 
-The service requires a PostgreSQL database. You can use Docker for quick setup:
+The service requires a PostgreSQL database and Redis for task queue processing. You can use Docker for quick setup:
 
 ```bash
-# Start PostgreSQL with Docker
+# Start PostgreSQL and Redis with Docker
 docker run --name postgres-user-svc \
   -e POSTGRES_DB=users \
   -e POSTGRES_USER=user \
   -e POSTGRES_PASSWORD=password \
   -p 5432:5432 \
   -d postgres:15
+
+docker run --name redis-user-svc \
+  -p 6379:6379 \
+  -d redis:7-alpine
 
 # Or use the provided docker-compose
 make docker-up
@@ -135,6 +171,10 @@ export DATABASE_PORT=5432
 export DATABASE_USER=postgres
 export DATABASE_PASSWORD=password
 export DATABASE_DB_NAME=user_svc
+
+# Redis settings
+export REDIS_HOST=localhost
+export REDIS_PORT=6379
 
 # JWT settings
 export JWT_SECRET_KEY=your-secret-key
@@ -248,7 +288,22 @@ make test
 
 # Run tests with coverage
 go test -v -cover ./...
+
+# Run specific test suites
+go test ./cmd/api -v                    # Graceful shutdown tests
+go test ./internal/app/domains/errs -v  # Error handling tests
+go test ./pkg/utils/crypt/password -v   # Password hashing tests
 ```
+
+### Graceful Shutdown Testing
+
+The graceful shutdown mechanism includes comprehensive tests:
+
+- **Context Cancellation**: Tests proper context propagation and cancellation
+- **Timeout Handling**: Tests shutdown timeout scenarios
+- **Worker Coordination**: Tests notification worker shutdown behavior
+- **Error Scenarios**: Tests shutdown behavior during errors
+- **Force Shutdown**: Tests fallback to force shutdown when timeout exceeded
 
 ## 🧹 Code Quality & Cleanup
 
@@ -394,16 +449,20 @@ user-svc/
 │   └── proto/              # Generated protobuf files
 ├── cmd/
 │   └── api/
-│       └── main.go         # Application entry point
+│       ├── main.go         # Application entry point with graceful shutdown
+│       └── main_test.go    # Graceful shutdown tests
 ├── deployments/            # Deployment configurations
 │   ├── Dockerfile
 │   └── k8s.yaml
+├── docs/                   # Documentation
+│   └── graceful-shutdown.md # Graceful shutdown documentation
 ├── internal/               # Private application code
 │   ├── app/               # Application layer
 │   │   ├── config/        # Configuration system
 │   │   ├── domains/       # Domain models and business rules
 │   │   │   ├── dto/       # Data transfer objects
 │   │   │   ├── errs/      # Domain errors
+│   │   │   ├── events/    # Event definitions and types
 │   │   │   └── models/    # Domain models
 │   │   ├── handler/       # gRPC handlers
 │   │   ├── repository/    # Data access layer
@@ -418,6 +477,8 @@ user-svc/
 │       ├── grpc/          # gRPC interceptors and utilities
 │       ├── log/           # Logging utilities
 │       └── tx/            # Transaction management utilities
+├── workers/               # Background workers
+│   └── notificaiton.go    # Notification worker with graceful shutdown
 ├── scripts/               # Test and utility scripts
 │   ├── test-all.sh        # Comprehensive gRPC tests (all methods)
 │   └── README.md          # Scripts documentation
@@ -480,8 +541,8 @@ docker-compose up -d
 #### Production (`docker-compose.yml`)
 - **user-svc**: User service on port 50051
 - **postgres**: PostgreSQL database on port 5432
+- **redis**: Redis cache and task queue on port 6379
 - **pgadmin**: Database management (optional) on port 8080
-- **redis**: Redis cache (optional) on port 6379
 
 
 
@@ -521,6 +582,10 @@ DB_USER=user
 DB_PASSWORD=password
 DB_NAME=users
 DB_SSL_MODE=disable
+
+# Redis
+REDIS_HOST=redis
+REDIS_PORT=6379
 
 # JWT
 JWT_SECRET_KEY=your-super-secret-jwt-key-change-in-production
@@ -710,7 +775,104 @@ The service uses structured logging with JSON format by default.
 
 ### Graceful Shutdown
 
-The service implements graceful shutdown with a 30-second timeout.
+The service implements a robust graceful shutdown mechanism that ensures all components are properly stopped when the application receives a shutdown signal or encounters an error.
+
+#### Key Features
+
+- **Context Cancellation**: Main application context coordinates shutdown across all components
+- **Signal Handling**: Responds to OS signals (SIGINT, SIGTERM) and server errors
+- **Timeout Protection**: 30-second graceful shutdown timeout with force shutdown fallback
+- **Worker Coordination**: Notification worker stops gracefully with remaining event processing
+- **Server Graceful Stop**: gRPC server stops accepting new connections and waits for active requests
+- **Comprehensive Logging**: Detailed shutdown progress logging for debugging
+
+#### Shutdown Flow
+
+1. **Shutdown Trigger**: OS signal or server error triggers shutdown
+2. **Context Cancellation**: Main application context is cancelled, signaling all components
+3. **Worker Shutdown**: Notification worker processes remaining events and stops
+4. **Server Shutdown**: gRPC server stops gracefully
+5. **Timeout Handling**: Force shutdown if graceful shutdown exceeds timeout
+
+For detailed documentation, see [`docs/graceful-shutdown.md`](docs/graceful-shutdown.md).
+
+## 🔄 Event-Driven Architecture
+
+The service implements an event-driven architecture for asynchronous processing:
+
+### Notification Event Logging
+
+- **Event Persistence**: All notification events are logged to the database
+- **Status Tracking**: Events have pending, success, and failed states
+- **Retry Mechanism**: Failed events can be retried automatically
+- **Event Types**: Support for different event types (login notifications, etc.)
+
+### Background Worker
+
+- **Notification Worker**: Processes pending notification events sequentially in a single thread
+- **Graceful Shutdown**: Worker stops cleanly when service shuts down, processing remaining events
+- **Context Cancellation**: Uses context for proper shutdown coordination and cancellation checks
+- **Single-Threaded Processing**: Events are processed sequentially for predictable behavior and easier debugging
+- **WaitGroup Integration**: Coordinates with main service for graceful shutdown
+- **Error Handling**: Comprehensive error handling and logging with event-level error tracking
+- **Immediate Processing**: Processes events immediately on startup, then follows configured intervals
+
+### Task Queue Integration
+
+- **Asynq**: Redis-based task queue for asynchronous processing
+- **Task Serialization**: Events are serialized and queued for processing
+- **Queue Management**: Proper queue management with error handling
+- **Redis Integration**: Uses Redis for task persistence and delivery
+
+### Event Flow
+
+```
+User Login → Event Logged → Worker Processes → Task Queued → Notification Sent
+```
+
+1. **User Login**: When a user logs in, a notification event is logged to the database
+2. **Worker Processing**: Background worker polls for pending events
+3. **Task Creation**: Worker creates Asynq tasks for notification processing
+4. **Queue Processing**: Tasks are queued in Redis for async processing
+5. **Status Update**: Event status is updated to success/failed based on processing result
+
+### Worker Configuration
+
+The notification worker runs with configurable intervals and graceful shutdown:
+
+```go
+// Worker configuration for single-threaded processing
+notificationWorker := workers.NewNotificationWorker(
+    logger,
+    asyncQClient,
+    notificationEventLogRepo,
+    &wg,
+    time.Second*10, // Polling interval
+    3,              // Max retries
+    100,            // Batch size
+)
+
+// Start worker with application context for coordinated shutdown
+go func() {
+    notificationWorker.Start(appCtx)
+}()
+```
+
+### Testing the Graceful Shutdown
+
+The graceful shutdown mechanism is thoroughly tested:
+
+```bash
+# Run shutdown tests
+go test ./cmd/api -v
+
+# Test scenarios covered:
+# - Basic context cancellation
+# - Shutdown timeout handling
+# - Immediate context cancellation
+# - Graceful shutdown with timeout
+# - Timeout exceeded scenarios
+```
 
 ## 🤝 Contributing
 
@@ -729,6 +891,9 @@ The service implements graceful shutdown with a 30-second timeout.
 - **Follow Patterns**: Maintain consistency with existing code patterns
 - **Test Coverage**: Ensure new functionality is properly tested
 - **Clean Architecture**: Maintain separation of concerns
+- **Context Management**: Always propagate and check context cancellation
+- **Graceful Shutdown**: Ensure all components support graceful shutdown
+- **Error Handling**: Use the error wrapper system for consistent error responses
 
 ## 📄 License
 

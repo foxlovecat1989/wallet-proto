@@ -11,7 +11,7 @@ func NewPassword(password string) (Password, error) {
 	if err := p.Validate(); err != nil {
 		return "", err
 	}
-	
+
 	return p, nil
 }
 

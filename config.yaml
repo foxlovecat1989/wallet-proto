@@ -29,4 +29,11 @@ redis:
 
 log:
   level: "info"
-  format: "json" 
+  format: "json"
+
+worker:
+  notification:
+    enabled: true
+    interval: "10s"
+    max_retries: 5
+    batch_size: 1000
