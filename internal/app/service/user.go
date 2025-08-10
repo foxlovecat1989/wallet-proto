@@ -87,7 +87,6 @@ func NewUserService(
 
 // Register handles user registration
 func (s *UserService) Register(ctx context.Context, req dto.RegisterReq) (*dto.RegisterResp, error) {
-	// Get logger from context
 	logger := logutils.GetLoggerOrDefault(ctx)
 
 	if err := req.Validate(); err != nil {
@@ -125,8 +124,7 @@ func (s *UserService) Register(ctx context.Context, req dto.RegisterReq) (*dto.R
 			return err
 		}
 
-		logger.Debug("Creating refresh token model")
-		refreshTokenModel, err := domain.NewRefreshToken(
+		refreshToken, err := domain.NewRefreshToken(
 			user.ID,
 			refreshToken,
 			time.Now().Add(s.config.JWT.RefreshTokenDuration).UnixMilli(),
@@ -136,25 +134,17 @@ func (s *UserService) Register(ctx context.Context, req dto.RegisterReq) (*dto.R
 			return err
 		}
 
-		logger.Debug("Storing refresh token in database")
-		if err := s.refreshTokenRepo.Create(txCtx, refreshTokenModel); err != nil {
+		if err := s.refreshTokenRepo.Create(txCtx, refreshToken); err != nil {
 			logger.WithError(err).Error("Failed to store refresh token in database")
 			return err
 		}
 
-		logger.Debug("Database transaction completed successfully")
 		return nil
 	})
 	if err != nil {
 		logger.WithError(err).Error("Database transaction failed")
 		return nil, err
 	}
-
-	logger.WithFields(logrus.Fields{
-		"user_id":  user.ID.String(),
-		"email":    user.Email.String(),
-		"username": user.Username.String(),
-	}).Info("User registration completed successfully")
 
 	return &dto.RegisterResp{
 		User:         user,
