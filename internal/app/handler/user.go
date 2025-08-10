@@ -72,14 +72,28 @@ func (h *UserHandler) Register(ctx context.Context, req *pb.RegisterRequest) (*p
 		"username": resp.User.Username.String(),
 	}).Info("User registration successful")
 
+	user := &pb.User{
+		Id:       resp.User.ID.String(),
+		Username: resp.User.Username.String(),
+	}
+
+	// Handle optional email
+	if resp.User.Email != nil {
+		user.Email = resp.User.Email.ToPtrString()
+	}
+
+	// Handle optional country code
+	if resp.User.CountryCode != nil {
+		user.CountryCode = resp.User.CountryCode.ToPtrString()
+	}
+
+	// Handle optional phone
+	if resp.User.Phone != nil {
+		user.Phone = resp.User.Phone.ToPtrString()
+	}
+
 	return &pb.RegisterResponse{
-		User: &pb.User{
-			Id:          resp.User.ID.String(),
-			Email:       resp.User.Email.ToPtrString(),
-			Username:    resp.User.Username.String(),
-			CountryCode: resp.User.CountryCode.ToPtrString(),
-			Phone:       resp.User.Phone.ToPtrString(),
-		},
+		User:         user,
 		AccessToken:  resp.AccessToken,
 		RefreshToken: resp.RefreshToken,
 	}, nil
