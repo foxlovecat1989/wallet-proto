@@ -1,8 +1,8 @@
-package models
+package domain
 
 import (
-	"user-svc/internal/app/domains/errs"
-	"user-svc/pkg/utils/crypt/password"
+	"wallet-user-svc/internal/app/errs"
+	"wallet-user-svc/pkg/utils/crypt/password"
 )
 
 // PasswordHash represents a hashed password

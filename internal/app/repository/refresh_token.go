@@ -5,10 +5,10 @@ import (
 	"database/sql"
 	"fmt"
 
-	"user-svc/internal/app/domains/errs"
-	"user-svc/internal/app/domains/models"
-	"user-svc/db"
-	"user-svc/pkg/utils/tx"
+	"wallet-user-svc/db"
+	"wallet-user-svc/internal/app/errs"
+	"wallet-user-svc/internal/app/model/domain"
+	"wallet-user-svc/pkg/utils/cx"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
@@ -24,8 +24,8 @@ type RefreshToken struct {
 	UpdatedAt int64     `db:"updated_at"`
 }
 
-func (rt *RefreshToken) ToDomain() *models.RefreshToken {
-	return &models.RefreshToken{
+func (rt *RefreshToken) ToDomain() *domain.RefreshToken {
+	return &domain.RefreshToken{
 		ID:        rt.ID,
 		UserID:    rt.UserID,
 		Token:     rt.Token,
@@ -47,7 +47,7 @@ func NewRefreshTokenRepository(db db.Store) *RefreshTokenRepository {
 }
 
 // Create creates a new refresh token
-func (r *RefreshTokenRepository) Create(ctx context.Context, refreshToken *models.RefreshToken) error {
+func (r *RefreshTokenRepository) Create(ctx context.Context, refreshToken *domain.RefreshToken) error {
 	query := `
 		INSERT INTO refresh_tokens (id, user_id, token, expires_at, is_revoked, created_at, updated_at)
 		VALUES (:id, :user_id, :token, :expires_at, :is_revoked, :created_at, :updated_at)
@@ -64,7 +64,7 @@ func (r *RefreshTokenRepository) Create(ctx context.Context, refreshToken *model
 	}
 
 	// Check if we're in a transaction
-	if tx, ok := ctx.Value(tx.TransactionContextKey).(*sqlx.Tx); ok {
+	if tx, ok := ctx.Value(cx.TransactionContextKey).(*sqlx.Tx); ok {
 		// Use transaction
 		_, err := tx.NamedExecContext(ctx, query, repoRefreshToken)
 		if err != nil {
@@ -83,7 +83,7 @@ func (r *RefreshTokenRepository) Create(ctx context.Context, refreshToken *model
 }
 
 // GetByTokenHash retrieves a refresh token by token hash
-func (r *RefreshTokenRepository) GetByToken(ctx context.Context, tokenHash string) (*models.RefreshToken, error) {
+func (r *RefreshTokenRepository) GetByToken(ctx context.Context, tokenHash string) (*domain.RefreshToken, error) {
 	query := `
 		SELECT id, user_id, token, expires_at, is_revoked, created_at, updated_at
 		FROM refresh_tokens 
@@ -93,7 +93,7 @@ func (r *RefreshTokenRepository) GetByToken(ctx context.Context, tokenHash strin
 	var refreshToken RefreshToken
 
 	// Check if we're in a transaction
-	if tx, ok := ctx.Value(tx.TransactionContextKey).(*sqlx.Tx); ok {
+	if tx, ok := ctx.Value(cx.TransactionContextKey).(*sqlx.Tx); ok {
 		// Use transaction
 		err := tx.QueryRowContext(ctx, query, tokenHash).Scan(&refreshToken.ID, &refreshToken.UserID, &refreshToken.Token, &refreshToken.ExpiresAt, &refreshToken.IsRevoked, &refreshToken.CreatedAt, &refreshToken.UpdatedAt)
 		if err != nil {

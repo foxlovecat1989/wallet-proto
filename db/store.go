@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"user-svc/internal/app/config"
+	"wallet-user-svc/internal/app/config"
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"

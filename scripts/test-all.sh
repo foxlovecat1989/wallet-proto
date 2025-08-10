@@ -27,14 +27,14 @@ echo "Request:"
 echo '{
   "email": "test@example.com",
   "username": "testuser",
-  "password": "password123"
+  "password": "SecurePass123!"
 }'
 echo ""
 echo "Response:"
 grpcurl -plaintext -d '{
   "email": "test@example.com",
   "username": "testuser",
-  "password": "password123"
+  "password": "SecurePass123!"
 }' localhost:50051 user.UserService/Register
 
 echo ""
@@ -46,14 +46,14 @@ echo "Request:"
 echo '{
   "email": "alice@example.com",
   "username": "alice",
-  "password": "securepass456"
+  "password": "AlicePass456!"
 }'
 echo ""
 echo "Response:"
 grpcurl -plaintext -d '{
   "email": "alice@example.com",
   "username": "alice",
-  "password": "securepass456"
+  "password": "AlicePass456!"
 }' localhost:50051 user.UserService/Register
 
 echo ""
@@ -65,14 +65,14 @@ echo "Request:"
 echo '{
   "email": "admin@example.com",
   "username": "admin",
-  "password": "admin123"
+  "password": "AdminPass789!"
 }'
 echo ""
 echo "Response:"
 grpcurl -plaintext -d '{
   "email": "admin@example.com",
   "username": "admin",
-  "password": "admin123"
+  "password": "AdminPass789!"
 }' localhost:50051 user.UserService/Register
 
 echo ""
@@ -89,13 +89,13 @@ echo "🧪 Test 1: Login with test user"
 echo "Request:"
 echo '{
   "email": "test@example.com",
-  "password": "password123"
+  "password": "SecurePass123!"
 }'
 echo ""
 echo "Response:"
 grpcurl -plaintext -d '{
   "email": "test@example.com",
-  "password": "password123"
+  "password": "SecurePass123!"
 }' localhost:50051 user.UserService/Login
 
 echo ""
@@ -106,13 +106,13 @@ echo "🧪 Test 2: Login with alice user"
 echo "Request:"
 echo '{
   "email": "alice@example.com",
-  "password": "securepass456"
+  "password": "AlicePass456!"
 }'
 echo ""
 echo "Response:"
 grpcurl -plaintext -d '{
   "email": "alice@example.com",
-  "password": "securepass456"
+  "password": "AlicePass456!"
 }' localhost:50051 user.UserService/Login
 
 echo ""
@@ -123,13 +123,13 @@ echo "🧪 Test 3: Login with admin user"
 echo "Request:"
 echo '{
   "email": "admin@example.com",
-  "password": "admin123"
+  "password": "AdminPass789!"
 }'
 echo ""
 echo "Response:"
 grpcurl -plaintext -d '{
   "email": "admin@example.com",
-  "password": "admin123"
+  "password": "AdminPass789!"
 }' localhost:50051 user.UserService/Login
 
 echo ""

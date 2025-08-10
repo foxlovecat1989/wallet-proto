@@ -3,8 +3,9 @@ package repository
 import (
 	"context"
 	"encoding/json"
-	"user-svc/internal/app/domains/models"
-	"user-svc/db"
+
+	"wallet-user-svc/db"
+	"wallet-user-svc/internal/app/model/domain"
 
 	"github.com/samber/lo"
 )
@@ -26,12 +27,12 @@ type NotificationEventLog struct {
 	UpdatedAt int64                      `db:"updated_at"`
 }
 
-func (e *NotificationEventLog) ToModel() *models.NotificationEventLog {
-	return &models.NotificationEventLog{
+func (e *NotificationEventLog) ToModel() *domain.NotificationEventLog {
+	return &domain.NotificationEventLog{
 		ID:        e.ID,
 		EventName: e.EventName,
 		Payload:   e.Payload,
-		Status:    models.NotificationEventLogStatus(e.Status),
+		Status:    domain.NotificationEventLogStatus(e.Status),
 		CreatedAt: e.CreatedAt,
 		UpdatedAt: e.UpdatedAt,
 	}
@@ -60,7 +61,7 @@ func (r *NotificationEventLogRepository) FindPendingEvents(
 	ctx context.Context,
 	eventName string,
 	batchSize int,
-) ([]*models.NotificationEventLog, error) {
+) ([]*domain.NotificationEventLog, error) {
 	events := make([]*NotificationEventLog, 0)
 	err := r.store.SelectContext(
 		ctx,
@@ -73,7 +74,7 @@ func (r *NotificationEventLogRepository) FindPendingEvents(
 		eventName, NotificationEventLogStatusPending, batchSize,
 	)
 
-	return lo.Map(events, func(event *NotificationEventLog, _ int) *models.NotificationEventLog {
+	return lo.Map(events, func(event *NotificationEventLog, _ int) *domain.NotificationEventLog {
 		return event.ToModel()
 	}), err
 }

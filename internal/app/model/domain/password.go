@@ -1,6 +1,6 @@
-package models
+package domain
 
-import "user-svc/internal/app/domains/errs"
+import "wallet-user-svc/internal/app/errs"
 
 // Password represents a validated password
 type Password string

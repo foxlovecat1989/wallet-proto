@@ -1,9 +1,9 @@
-package models
+package domain
 
 import (
 	"time"
 
-	"user-svc/internal/app/domains/errs"
+	"wallet-user-svc/internal/app/errs"
 
 	"github.com/google/uuid"
 )

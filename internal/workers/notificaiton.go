@@ -5,17 +5,16 @@ import (
 	"encoding/json"
 	"sync"
 	"time"
-	"user-svc/internal/app/domains/dto"
-	"user-svc/internal/app/domains/events"
-	"user-svc/internal/app/domains/models"
-
+	"wallet-user-svc/internal/app/model/domain"
+	"wallet-user-svc/internal/app/model/dto"
+	"wallet-user-svc/internal/app/model/events"
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
 	"github.com/sirupsen/logrus"
 )
 
 type NotificationRepository interface {
-	FindPendingEvents(ctx context.Context, eventName string, batchSize int) ([]*models.NotificationEventLog, error)
+	FindPendingEvents(ctx context.Context, eventName string, batchSize int) ([]*domain.NotificationEventLog, error)
 	UpdateStatusSuccess(ctx context.Context, id string) error
 }
 
@@ -137,7 +136,7 @@ func (s *NotificationWorker) processPendingLoginEvents(ctx context.Context) {
 	s.logger.WithField("count", len(events)).Info("Processed pending events")
 }
 
-func (s *NotificationWorker) processEvent(ctx context.Context, event *models.NotificationEventLog) error {
+func (s *NotificationWorker) processEvent(ctx context.Context, event *domain.NotificationEventLog) error {
 	var params dto.SendLoginNotificationParams
 	if err := json.Unmarshal(event.Payload, &params); err != nil {
 		s.logger.WithError(err).WithField("eventID", event.ID).Error("Could not unmarshal payload")

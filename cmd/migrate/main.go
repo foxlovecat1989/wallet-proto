@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"user-svc/pkg/migrate"
+	"wallet-user-svc/pkg/migrate"
 )
 
 func main() {

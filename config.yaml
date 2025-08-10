@@ -13,7 +13,7 @@ database:
   port: 5432
   user: "user"
   password: "password"
-  db_name: "users"
+  db_name: "wallet-user-svc"
   ssl_mode: "disable"
 
 jwt:

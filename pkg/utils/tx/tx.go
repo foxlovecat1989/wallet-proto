@@ -5,12 +5,8 @@ import (
 	"database/sql"
 
 	"github.com/jmoiron/sqlx"
+	"wallet-user-svc/pkg/utils/cx"
 )
-
-// TransactionContextKey is the key used to store transaction in context
-type contextKey string
-
-const TransactionContextKey contextKey = "txctx"
 
 // TxWrapper wraps a database transaction and provides helper methods
 type TxWrapper struct {
@@ -29,7 +25,7 @@ func (tw *TxWrapper) GetTx() *sqlx.Tx {
 
 // GetTxFromContext retrieves a transaction from context
 func GetTxFromContext(ctx context.Context) (*sqlx.Tx, bool) {
-	tx, ok := ctx.Value(TransactionContextKey).(*sqlx.Tx)
+	tx, ok := ctx.Value(cx.TransactionContextKey).(*sqlx.Tx)
 	return tx, ok
 }
 

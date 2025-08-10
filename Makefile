@@ -47,18 +47,16 @@ dev:
 	@echo "Note: You may need to run with config file: ./bin/user-svc-api -config config.yaml"
 	$(MAKE) server
 
-# Setup proto (update submodule and generate files)
+# Setup proto (generate files)
 proto:
 	@echo "Cleaning up existing proto files..."
 	rm -rf api/proto/*.pb.go
-	@echo "Updating proto submodule..."
-	git submodule update --remote proto
-	@echo "Generating protobuf files from proto/ to api/proto/..."
+	@echo "Generating protobuf files from proto/user-svc.proto to api/proto/..."
 	
 	protoc --proto_path=proto \
 		--go_out=api/proto --go_opt=paths=source_relative \
 		--go-grpc_out=api/proto --go-grpc_opt=paths=source_relative \
-		proto/*.proto
+		proto/user-svc.proto
 	@echo "Proto setup completed!"
 
 # Docker commands
@@ -136,6 +134,34 @@ migrate-create:
 	touch "$${filename}.down.sql"; \
 	echo "Created migration files: $${filename}.up.sql and $${filename}.down.sql"
 
+# Linting commands
+lint:
+	@echo "Running linters..."
+	@echo "Running golangci-lint..."
+	@if command -v golangci-lint >/dev/null 2>&1; then \
+		golangci-lint run; \
+	else \
+		echo "golangci-lint not found. Installing..."; \
+		go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest; \
+		golangci-lint run; \
+	fi
+
+lint-install:
+	@echo "Installing linting tools..."
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	go install golang.org/x/lint/golint@latest
+	go install honnef.co/go/tools/cmd/staticcheck@latest
+	@echo "Linting tools installed!"
+
+lint-fix:
+	@echo "Running linters with auto-fix..."
+	@if command -v golangci-lint >/dev/null 2>&1; then \
+		golangci-lint run --fix; \
+	else \
+		echo "golangci-lint not found. Run 'make lint-install' first."; \
+		exit 1; \
+	fi
+
 # Show help
 help:
 	@echo "Available targets:"
@@ -147,7 +173,7 @@ help:
 	@echo "  server       - Run server (alias for run)"
 	@echo "  dev          - Start database and server for development"
 	@echo "  test-all     - Test all gRPC endpoints"
-	@echo "  proto        - Update submodule and generate proto files"
+	@echo "  proto        - Generate proto files"
 	@echo "  migrate      - Build migration tool"
 	@echo "  migrate-up   - Run all pending migrations"
 	@echo "  migrate-down - Rollback migrations (use STEPS=N to specify number)"
@@ -158,4 +184,7 @@ help:
 	@echo "  docker-up    - Start all services with docker-compose"
 	@echo "  docker-down  - Stop all services with docker-compose"
 	@echo "  docker-clean - Clean up docker volumes and containers"
+	@echo "  lint         - Run all linters"
+	@echo "  lint-install - Install linting tools"
+	@echo "  lint-fix     - Run linters with auto-fix"
 	@echo "  help         - Show this help message"

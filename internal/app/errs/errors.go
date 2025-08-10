@@ -9,6 +9,25 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// Domain errors with gRPC status codes
+var (
+	ErrInvalidEmail         = NewError(codes.InvalidArgument, "invalid email")
+	ErrInvalidUsername      = NewError(codes.InvalidArgument, "invalid username")
+	ErrInvalidPassword      = NewError(codes.InvalidArgument, "invalid password")
+	ErrUserNotFound         = NewError(codes.NotFound, "user not found")
+	ErrUserExists           = NewError(codes.AlreadyExists, "user already exists")
+	ErrInvalidToken         = NewError(codes.InvalidArgument, "invalid token")
+	ErrTokenExpired         = NewError(codes.Unauthenticated, "token expired")
+	ErrTokenRevoked         = NewError(codes.Unauthenticated, "token revoked")
+	ErrTokenNotFound        = NewError(codes.NotFound, "token not found")
+	ErrTokenIsRequired      = NewError(codes.InvalidArgument, "token is required")
+	ErrInvalidCredentials   = NewError(codes.Unauthenticated, "invalid credentials")
+	ErrEmailIsRequired      = NewError(codes.InvalidArgument, "email is required")
+	ErrEmailOrPhoneRequired = NewError(codes.InvalidArgument, "either email or both country code and phone are required")
+	ErrInvalidPhoneNumber   = NewError(codes.InvalidArgument, "invalid phone number")
+	ErrInvalidCountryCode   = NewError(codes.InvalidArgument, "invalid country code")
+)	
+
 // ErrorWrapper is a customizable error wrapper with rich metadata
 type ErrorWrapper struct {
 	Code       codes.Code
@@ -108,36 +127,21 @@ func WrapError(err error, code codes.Code, message string) *ErrorWrapper {
 	}
 }
 
-// Domain errors with gRPC status codes
-var (
-	ErrInvalidEmail       = NewError(codes.InvalidArgument, "invalid email")
-	ErrInvalidUsername    = NewError(codes.InvalidArgument, "invalid username")
-	ErrInvalidPassword    = NewError(codes.InvalidArgument, "invalid password")
-	ErrUserNotFound       = NewError(codes.NotFound, "user not found")
-	ErrUserExists         = NewError(codes.AlreadyExists, "user already exists")
-	ErrInvalidToken       = NewError(codes.InvalidArgument, "invalid token")
-	ErrTokenExpired       = NewError(codes.Unauthenticated, "token expired")
-	ErrTokenRevoked       = NewError(codes.Unauthenticated, "token revoked")
-	ErrTokenNotFound      = NewError(codes.NotFound, "token not found")
-	ErrTokenIsRequired    = NewError(codes.InvalidArgument, "token is required")
-	ErrInvalidCredentials = NewError(codes.Unauthenticated, "invalid credentials")
-	ErrEmailIsRequired    = NewError(codes.InvalidArgument, "email is required")
-)
-
 // Legacy error variables for backward compatibility
 var (
-	ErrInvalidEmailLegacy       = errors.New("invalid email")
-	ErrInvalidUsernameLegacy    = errors.New("invalid username")
-	ErrInvalidPasswordLegacy    = errors.New("invalid password")
-	ErrUserNotFoundLegacy       = errors.New("user not found")
-	ErrUserExistsLegacy         = errors.New("user already exists")
-	ErrInvalidTokenLegacy       = errors.New("invalid token")
-	ErrTokenExpiredLegacy       = errors.New("token expired")
-	ErrTokenRevokedLegacy       = errors.New("token revoked")
-	ErrTokenNotFoundLegacy      = errors.New("token not found")
-	ErrTokenIsRequiredLegacy    = errors.New("token is required")
-	ErrInvalidCredentialsLegacy = errors.New("invalid credentials")
-	ErrEmailIsRequiredLegacy    = errors.New("email is required")
+	ErrInvalidEmailLegacy         = errors.New("invalid email")
+	ErrInvalidUsernameLegacy      = errors.New("invalid username")
+	ErrInvalidPasswordLegacy      = errors.New("invalid password")
+	ErrUserNotFoundLegacy         = errors.New("user not found")
+	ErrUserExistsLegacy           = errors.New("user already exists")
+	ErrInvalidTokenLegacy         = errors.New("invalid token")
+	ErrTokenExpiredLegacy         = errors.New("token expired")
+	ErrTokenRevokedLegacy         = errors.New("token revoked")
+	ErrTokenNotFoundLegacy        = errors.New("token not found")
+	ErrTokenIsRequiredLegacy      = errors.New("token is required")
+	ErrInvalidCredentialsLegacy   = errors.New("invalid credentials")
+	ErrEmailIsRequiredLegacy      = errors.New("email is required")
+	ErrEmailOrPhoneRequiredLegacy = errors.New("either email or both country code and phone are required")
 )
 
 // ToGRPCError converts any error to a gRPC error
@@ -159,7 +163,8 @@ func ToGRPCError(err error) error {
 	// Map common errors to appropriate gRPC status codes
 	switch err {
 	case ErrInvalidEmailLegacy, ErrInvalidUsernameLegacy, ErrInvalidPasswordLegacy,
-		ErrInvalidTokenLegacy, ErrTokenIsRequiredLegacy, ErrEmailIsRequiredLegacy:
+		ErrInvalidTokenLegacy, ErrTokenIsRequiredLegacy, ErrEmailIsRequiredLegacy,
+		ErrEmailOrPhoneRequiredLegacy:
 		return status.Error(codes.InvalidArgument, err.Error())
 	case ErrUserNotFoundLegacy, ErrTokenNotFoundLegacy:
 		return status.Error(codes.NotFound, err.Error())

@@ -4,8 +4,11 @@
 -- User table for authentication service
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    
     email VARCHAR(255) UNIQUE NOT NULL,
     username VARCHAR(100) NOT NULL,
+    country_code VARCHAR(5),
+    phone VARCHAR(15),
     password_hash VARCHAR(255) NOT NULL,
     created_at BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000),
     updated_at BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
@@ -14,6 +17,7 @@ CREATE TABLE IF NOT EXISTS users (
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+CREATE INDEX IF NOT EXISTS idx_users_country_code_phone ON users(country_code, phone);
 CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at);
 
 -- Create a trigger to automatically update the updated_at timestamp

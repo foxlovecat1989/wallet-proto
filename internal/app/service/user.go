@@ -6,29 +6,31 @@ import (
 	"encoding/json"
 	"time"
 
-	"user-svc/internal/app/config"
-	"user-svc/internal/app/domains/dto"
-	"user-svc/internal/app/domains/errs"
-	"user-svc/internal/app/domains/events"
-	"user-svc/internal/app/domains/models"
-	"user-svc/internal/app/repository"
-	"user-svc/pkg/utils/crypt/token"
-	"user-svc/pkg/utils/log"
-	"user-svc/pkg/utils/tx"
+	"wallet-user-svc/internal/app/config"
+	"wallet-user-svc/internal/app/errs"
+	"wallet-user-svc/internal/app/model/domain"
+	"wallet-user-svc/internal/app/model/dto"
+	"wallet-user-svc/internal/app/model/events"
+	"wallet-user-svc/internal/app/repository"
+	"wallet-user-svc/pkg/utils/crypt/token"
+	"wallet-user-svc/pkg/utils/cx"
+	logutils "wallet-user-svc/pkg/utils/log"
+	"wallet-user-svc/pkg/utils/tx"
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
 
 type UserRepository interface {
-	Create(ctx context.Context, user *models.User) error
-	GetByEmail(ctx context.Context, email string) (*models.User, error)
-	GetByID(ctx context.Context, id uuid.UUID) (*models.User, error)
+	Create(ctx context.Context, user *domain.User) error
+	GetByEmail(ctx context.Context, email string) (*domain.User, error)
+	GetByPhone(ctx context.Context, countryCode, phone string) (*domain.User, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*domain.User, error)
 }
 
 type RefreshTokenRepository interface {
-	Create(ctx context.Context, refreshToken *models.RefreshToken) error
-	GetByToken(ctx context.Context, token string) (*models.RefreshToken, error)
+	Create(ctx context.Context, refreshToken *domain.RefreshToken) error
+	GetByToken(ctx context.Context, token string) (*domain.RefreshToken, error)
 }
 
 type TxManager interface {
@@ -64,7 +66,7 @@ func NewUserService(
 	tokenMaker token.TokenMaker,
 	notificationEventLogRepo NotificationEventLogRepository,
 ) *UserService {
-	log.Info("Initializing UserService")
+	logutils.Info("Initializing UserService")
 
 	service := &UserService{
 		config:                   config,
@@ -75,7 +77,7 @@ func NewUserService(
 		notificationEventLogRepo: notificationEventLogRepo,
 	}
 
-	log.WithFields(logrus.Fields{
+	logutils.WithFields(logrus.Fields{
 		"access_token_duration":  config.JWT.AccessTokenDuration.String(),
 		"refresh_token_duration": config.JWT.RefreshTokenDuration.String(),
 	}).Info("UserService initialized successfully")
@@ -85,27 +87,26 @@ func NewUserService(
 
 // Register handles user registration
 func (s *UserService) Register(ctx context.Context, req dto.RegisterReq) (*dto.RegisterResp, error) {
-	logger := log.WithFields(logrus.Fields{
-		"method":   "Register",
-		"email":    req.Email,
-		"username": req.Username,
-	})
-
-	logger.Info("Starting user registration")
+	// Get logger from context
+	logger := logutils.GetLoggerOrDefault(ctx)
 
 	if err := req.Validate(); err != nil {
 		logger.WithError(err).Error("Request validation failed")
 		return nil, err
 	}
 
-	logger.Debug("Creating new user with password")
-	user, err := models.NewUserWithPassword(req.Email, req.Password, req.Username)
+	user, err := domain.NewUserWithPassword(
+		req.Email,
+		req.Password,
+		req.Username,
+		req.CountryCode,
+		req.Phone,
+	)
 	if err != nil {
 		logger.WithError(err).Error("Failed to create user with password")
 		return nil, err
 	}
 
-	logger.WithField("user_id", user.ID.String()).Debug("Creating token pair")
 	accessToken, refreshToken, err := s.tokenMaker.CreateTokenPair(
 		user.ID.String(),
 		user.Username.String(),
@@ -116,19 +117,16 @@ func (s *UserService) Register(ctx context.Context, req dto.RegisterReq) (*dto.R
 		return nil, err
 	}
 
-	logger.Debug("Starting database transaction")
 	err = s.txManager.WithTransaction(ctx, func(txWrapper *tx.TxWrapper) error {
-		// Create a new context with the transaction
-		txCtx := context.WithValue(ctx, tx.TransactionContextKey, txWrapper.GetTx())
+		txCtx := context.WithValue(ctx, cx.TransactionContextKey, txWrapper.GetTx())
 
-		logger.Debug("Creating user in database")
 		if err := s.userRepo.Create(txCtx, user); err != nil {
 			logger.WithError(err).Error("Failed to create user in database")
 			return err
 		}
 
 		logger.Debug("Creating refresh token model")
-		refreshTokenModel, err := models.NewRefreshToken(
+		refreshTokenModel, err := domain.NewRefreshToken(
 			user.ID,
 			refreshToken,
 			time.Now().Add(s.config.JWT.RefreshTokenDuration).UnixMilli(),
@@ -167,18 +165,45 @@ func (s *UserService) Register(ctx context.Context, req dto.RegisterReq) (*dto.R
 
 // Login handles user login
 func (s *UserService) Login(ctx context.Context, req dto.LoginReq) (*dto.LoginResp, error) {
-	logger := log.WithFields(logrus.Fields{
-		"method": "Login",
-		"email":  req.Email,
-	})
+	// Get logger from context
+	logger := logutils.GetLoggerOrDefault(ctx)
 
 	logger.Info("Starting user login")
 
-	if err := req.Validate(); err != nil {
-		logger.WithError(err).Error("Request validation failed")
+	// Validate email is provided
+	if req.Email == "" {
+		logger.Error("Email is required for login")
+		return nil, errs.ErrEmailIsRequired
+	}
+
+	user, err := s.authenticateUser(ctx, req, logger)
+	if err != nil {
 		return nil, err
 	}
 
+	accessToken, refreshToken, err := s.createTokenPair(user, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.storeRefreshToken(ctx, user, refreshToken, logger); err != nil {
+		return nil, err
+	}
+
+	s.logLoginSuccess(user, logger)
+
+	if err := s.createLoginNotification(ctx, user, logger); err != nil {
+		return nil, err
+	}
+
+	return &dto.LoginResp{
+		User:         user,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	}, nil
+}
+
+func (s *UserService) authenticateUser(ctx context.Context, req dto.LoginReq, logger *logrus.Entry) (*domain.User, error) {
 	logger.Debug("Retrieving user by email")
 	user, err := s.userRepo.GetByEmail(ctx, req.Email)
 	if err != nil {
@@ -195,6 +220,10 @@ func (s *UserService) Login(ctx context.Context, req dto.LoginReq) (*dto.LoginRe
 		return nil, errs.ErrInvalidCredentials
 	}
 
+	return user, nil
+}
+
+func (s *UserService) createTokenPair(user *domain.User, logger *logrus.Entry) (string, string, error) {
 	logger.WithField("user_id", user.ID.String()).Debug("Creating token pair")
 	accessToken, refreshToken, err := s.tokenMaker.CreateTokenPair(
 		user.ID.String(),
@@ -203,16 +232,18 @@ func (s *UserService) Login(ctx context.Context, req dto.LoginReq) (*dto.LoginRe
 	)
 	if err != nil {
 		logger.WithError(err).Error("Failed to create token pair")
-		return nil, err
+		return "", "", err
 	}
+	return accessToken, refreshToken, nil
+}
 
+func (s *UserService) storeRefreshToken(ctx context.Context, user *domain.User, refreshToken string, logger *logrus.Entry) error {
 	logger.Debug("Starting database transaction")
-	err = s.txManager.WithTransaction(ctx, func(txWrapper *tx.TxWrapper) error {
-		// Create a new context with the transaction
-		txCtx := context.WithValue(ctx, tx.TransactionContextKey, txWrapper.GetTx())
+	return s.txManager.WithTransaction(ctx, func(txWrapper *tx.TxWrapper) error {
+		txCtx := context.WithValue(ctx, cx.TransactionContextKey, txWrapper.GetTx())
 
 		logger.Debug("Creating refresh token model")
-		refreshTokenModel, err := models.NewRefreshToken(
+		refreshTokenModel, err := domain.NewRefreshToken(
 			user.ID,
 			refreshToken,
 			time.Now().Add(s.config.JWT.RefreshTokenDuration).UnixMilli(),
@@ -231,26 +262,37 @@ func (s *UserService) Login(ctx context.Context, req dto.LoginReq) (*dto.LoginRe
 		logger.Debug("Database transaction completed successfully")
 		return nil
 	})
-	if err != nil {
-		logger.WithError(err).Error("Database transaction failed")
-		return nil, err
-	}
+}
 
-	logger.WithFields(logrus.Fields{
+func (s *UserService) logLoginSuccess(user *domain.User, logger *logrus.Entry) {
+	logFields := logrus.Fields{
 		"user_id":  user.ID.String(),
-		"email":    user.Email.String(),
 		"username": user.Username.String(),
-	}).Info("User login completed successfully")
+	}
+	if user.Email != nil {
+		logFields["email"] = user.Email.String()
+	}
+	if user.CountryCode != nil && user.Phone != nil {
+		logFields["country_code"] = *user.CountryCode
+		logFields["phone"] = *user.Phone
+	}
+	logger.WithFields(logFields).Info("User login completed successfully")
+}
 
-	payload, err := json.Marshal(dto.SendLoginNotificationParams{
+func (s *UserService) createLoginNotification(ctx context.Context, user *domain.User, logger *logrus.Entry) error {
+	notificationParams := dto.SendLoginNotificationParams{
 		UserID:   user.ID.String(),
-		Email:    user.Email.String(),
 		Username: user.Username.String(),
 		LoginAt:  time.Now(),
-	})
+	}
+	if user.Email != nil {
+		email := user.Email.String()
+		notificationParams.Email = &email
+	}
+	payload, err := json.Marshal(notificationParams)
 	if err != nil {
 		logger.WithError(err).Error("Failed to marshal notification payload")
-		return nil, err
+		return err
 	}
 
 	if err := s.notificationEventLogRepo.Create(ctx, &repository.NotificationEventLog{
@@ -260,27 +302,22 @@ func (s *UserService) Login(ctx context.Context, req dto.LoginReq) (*dto.LoginRe
 		Status:    repository.NotificationEventLogStatusPending,
 	}); err != nil {
 		logger.WithError(err).Error("Failed to create notification event log")
-		return nil, err
+		return err
 	}
 
-	return &dto.LoginResp{
-		User:         user,
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-	}, nil
+	return nil
 }
 
 func (s *UserService) RefreshToken(ctx context.Context, req dto.RefreshTokenReq) (*dto.RefreshTokenResp, error) {
-	logger := log.WithFields(logrus.Fields{
-		"method":       "RefreshToken",
-		"token_length": len(req.RefreshToken),
-	})
+	// Get logger from context
+	logger := logutils.GetLoggerOrDefault(ctx)
 
 	logger.Info("Starting token refresh")
 
-	if err := req.Validate(); err != nil {
-		logger.WithError(err).Error("Request validation failed")
-		return nil, err
+	// Validate refresh token is provided
+	if req.RefreshToken == "" {
+		logger.Error("Refresh token is required")
+		return nil, errs.ErrTokenIsRequired
 	}
 
 	logger.Debug("Retrieving refresh token from database")

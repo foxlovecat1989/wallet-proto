@@ -1,6 +1,6 @@
-package models
+package domain
 
-import "user-svc/internal/app/domains/errs"
+import "wallet-user-svc/internal/app/errs"
 
 // Username represents a validated username
 type Username string
@@ -18,45 +18,60 @@ func NewUsername(username string) (Username, error) {
 func (u Username) Validate() error {
 	username := string(u)
 
-	// Check if username is empty
-	if username == "" {
-		return errs.ErrInvalidUsername
+	if err := u.validateLength(username); err != nil {
+		return err
+	}
+	if err := u.validateCharacters(username); err != nil {
+		return err
+	}
+	if err := u.validateBoundaries(username); err != nil {
+		return err
+	}
+	if err := u.validateConsecutive(username); err != nil {
+		return err
 	}
 
-	// Check minimum length (at least 3 characters)
-	if len(username) < 3 {
+	return nil
+}
+
+func (u Username) validateLength(username string) error {
+	if username == "" || len(username) < 3 || len(username) > 30 {
 		return errs.ErrInvalidUsername
 	}
+	return nil
+}
 
-	// Check maximum length (reasonable limit)
-	if len(username) > 30 {
-		return errs.ErrInvalidUsername
-	}
-
-	// Check for valid characters (alphanumeric, underscore, hyphen)
+func (u Username) validateCharacters(username string) error {
 	for _, char := range username {
-		if !((char >= 'a' && char <= 'z') ||
-			(char >= 'A' && char <= 'Z') ||
-			(char >= '0' && char <= '9') ||
-			char == '_' || char == '-') {
+		if !u.isValidChar(char) {
 			return errs.ErrInvalidUsername
 		}
 	}
+	return nil
+}
 
-	// Check that username doesn't start or end with underscore or hyphen
+func (u Username) isValidChar(char rune) bool {
+	return (char >= 'a' && char <= 'z') ||
+		(char >= 'A' && char <= 'Z') ||
+		(char >= '0' && char <= '9') ||
+		char == '_' || char == '-'
+}
+
+func (u Username) validateBoundaries(username string) error {
 	if len(username) > 0 && (username[0] == '_' || username[0] == '-' ||
 		username[len(username)-1] == '_' || username[len(username)-1] == '-') {
 		return errs.ErrInvalidUsername
 	}
+	return nil
+}
 
-	// Check for consecutive underscores or hyphens
+func (u Username) validateConsecutive(username string) error {
 	for i := 0; i < len(username)-1; i++ {
 		if (username[i] == '_' && username[i+1] == '_') ||
 			(username[i] == '-' && username[i+1] == '-') {
 			return errs.ErrInvalidUsername
 		}
 	}
-
 	return nil
 }
 

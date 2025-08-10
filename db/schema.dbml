@@ -1,0 +1,102 @@
+// User Service Database Schema
+// This file contains the complete database schema in DBML format
+
+Project user_service {
+  database_type: 'PostgreSQL'
+  Note: 'User Service Database Schema - Handles user authentication, session management, and notification events'
+}
+
+// User table for authentication and profile management
+Table users {
+  id uuid [pk, default: `gen_random_uuid()`]
+  email varchar(255) [not null, unique]
+  username varchar(100) [not null]
+  password_hash varchar(255) [not null]
+  first_name varchar(100)
+  last_name varchar(100)
+  country_code varchar(5)
+  phone varchar(15)
+  date_of_birth date
+  profile_picture_url varchar(500)
+  created_at bigint [default: `(EXTRACT(EPOCH FROM NOW()) * 1000)`]
+  updated_at bigint [default: `(EXTRACT(EPOCH FROM NOW()) * 1000)`]
+
+  indexes {
+    (email) [name: 'idx_users_email']
+    (username) [name: 'idx_users_username']
+    (country_code, phone) [name: 'idx_users_country_code_phone']
+    (created_at) [name: 'idx_users_created_at']
+  }
+
+  Note: 'Core user table containing authentication and profile information'
+}
+
+// Refresh tokens table for session management
+Table refresh_tokens {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null, ref: > users.id]
+  token varchar(500) [not null]
+  expires_at bigint [not null]
+  is_revoked boolean [default: false]
+  created_at bigint [default: `(EXTRACT(EPOCH FROM NOW()) * 1000)`]
+  updated_at bigint [default: `(EXTRACT(EPOCH FROM NOW()) * 1000)`]
+
+  indexes {
+    (user_id) [name: 'idx_refresh_tokens_user_id']
+    (token) [name: 'idx_refresh_tokens_token_hash']
+    (expires_at) [name: 'idx_refresh_tokens_expires_at']
+    (is_revoked) [name: 'idx_refresh_tokens_is_revoked']
+    (created_at) [name: 'idx_refresh_tokens_created_at']
+  }
+
+  Note: 'Manages user session tokens for authentication with automatic cleanup'
+}
+
+// Notification events table for event logging
+Table notification_event_logs {
+  id uuid [pk]
+  event_name varchar(255) [not null]
+  payload jsonb [not null]
+  status varchar(50) [not null, default: 'pending']
+  created_at bigint [default: `(EXTRACT(EPOCH FROM NOW()) * 1000)`]
+  updated_at bigint [default: `(EXTRACT(EPOCH FROM NOW()) * 1000)`]
+
+  indexes {
+    (event_name, status) [name: 'idx_notification_event_logs_event_name_status']
+  }
+
+  Note: 'Stores notification events for processing and tracking with flexible JSON payload'
+}
+
+// Relationships
+Ref: refresh_tokens.user_id > users.id [delete: cascade, update: cascade]
+
+// Database Functions and Triggers
+// Note: These are PostgreSQL-specific and would need to be implemented separately
+
+/*
+-- Function to automatically update updated_at timestamp
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = EXTRACT(EPOCH FROM NOW()) * 1000;
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Triggers for automatic timestamp updates
+CREATE TRIGGER update_users_updated_at 
+    BEFORE UPDATE ON users 
+    FOR EACH ROW 
+    EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_refresh_tokens_updated_at 
+    BEFORE UPDATE ON refresh_tokens 
+    FOR EACH ROW 
+    EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_notification_event_logs_updated_at 
+    BEFORE UPDATE ON notification_event_logs 
+    FOR EACH ROW 
+    EXECUTE FUNCTION update_updated_at_column();
+*/

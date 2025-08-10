@@ -3,8 +3,11 @@ package handler
 import (
 	"context"
 
-	pb "user-svc/api/proto"
-	"user-svc/internal/app/domains/dto"
+	pb "wallet-user-svc/api/proto"
+	"wallet-user-svc/internal/app/model/dto"
+	logutils "wallet-user-svc/pkg/utils/log"
+
+	"github.com/sirupsen/logrus"
 )
 
 // UserHandler handles gRPC requests for user operations
@@ -29,20 +32,53 @@ func NewUserHandler(userService UserService) *UserHandler {
 
 // Register handles user registration
 func (h *UserHandler) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterResponse, error) {
-	resp, err := h.userService.Register(ctx, dto.RegisterReq{
-		Email:    req.Email,
+	// Get logger from context
+	logger := logutils.GetLoggerOrDefault(ctx)
+
+	logger.WithFields(logrus.Fields{
+		"username":     req.Username,
+		"email":        req.Email,
+		"country_code": req.CountryCode,
+		"phone":        req.Phone,
+	}).Info("User registration request received")
+
+	// Create RegisterReq with proper handling of optional fields
+	registerReq := dto.RegisterReq{
 		Username: req.Username,
 		Password: req.Password,
-	})
+	}
+
+	// Handle email (can be empty if using phone)
+	if req.Email != "" {
+		registerReq.Email = &req.Email
+	}
+
+	// Handle country code and phone (can be empty if using email)
+	if req.CountryCode != "" {
+		registerReq.CountryCode = &req.CountryCode
+	}
+	if req.Phone != "" {
+		registerReq.Phone = &req.Phone
+	}
+
+	resp, err := h.userService.Register(ctx, registerReq)
 	if err != nil {
+		logger.WithError(err).Error("User registration failed")
 		return nil, err
 	}
 
+	logger.WithFields(logrus.Fields{
+		"user_id":  resp.User.ID.String(),
+		"username": resp.User.Username.String(),
+	}).Info("User registration successful")
+
 	return &pb.RegisterResponse{
 		User: &pb.User{
-			Id:       resp.User.ID.String(),
-			Email:    resp.User.Email.String(),
-			Username: resp.User.Username.String(),
+			Id:          resp.User.ID.String(),
+			Email:       resp.User.Email.ToPtrString(),
+			Username:    resp.User.Username.String(),
+			CountryCode: resp.User.CountryCode.ToPtrString(),
+			Phone:       resp.User.Phone.ToPtrString(),
 		},
 		AccessToken:  resp.AccessToken,
 		RefreshToken: resp.RefreshToken,
@@ -51,20 +87,19 @@ func (h *UserHandler) Register(ctx context.Context, req *pb.RegisterRequest) (*p
 
 // Login handles user login
 func (h *UserHandler) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginResponse, error) {
+	// Get logger from context
+	logger := logutils.GetLoggerOrDefault(ctx)
+
 	resp, err := h.userService.Login(ctx, dto.LoginReq{
-		Email:    req.Email,
 		Password: req.Password,
+		Email:    req.Email,
 	})
 	if err != nil {
+		logger.WithError(err).Error("User login failed")
 		return nil, err
 	}
 
 	return &pb.LoginResponse{
-		User: &pb.User{
-			Id:       resp.User.ID.String(),
-			Email:    resp.User.Email.String(),
-			Username: resp.User.Username.String(),
-		},
 		AccessToken:  resp.AccessToken,
 		RefreshToken: resp.RefreshToken,
 	}, nil
