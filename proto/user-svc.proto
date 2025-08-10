@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+package user;
+
+option go_package = "user-svc/pb";
+
+// UserService provides user authentication and management functionality
+service UserService {
+  // Register creates a new user account
+  // Returns user information, access token, and refresh token on success
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+
+  // Login authenticates an existing user
+  // Returns user information, access token, and refresh token on success
+  rpc Login(LoginRequest) returns (LoginResponse);
+
+  // RefreshToken exchanges a refresh token for a new access token and refresh token pair
+  // Returns new access token and refresh token on success
+  rpc RefreshToken(RefreshTokenRequest) returns (RefreshTokenResponse);
+}
+
+// User message - represents a user in the system
+message User {
+  string id = 1;
+  string email = 2;
+  string username = 3;
+  string country_code = 4;
+  string phone = 5;
+}
+
+// Register request message - used for user registration
+message RegisterRequest {
+  string email = 1;
+  string username = 2;
+  string password = 3;
+  string country_code = 4;
+  string phone = 5;
+}
+
+// Register response message - returned after successful registration
+message RegisterResponse {
+  User user = 1;
+  string access_token = 2;
+  string refresh_token = 3;
+}
+
+// Login request message - used for user authentication
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+}
+
+// Login response message - returned after successful login
+message LoginResponse {
+  User user = 1;
+  string access_token = 2;
+  string refresh_token = 3;
+}
+
+// Refresh token request message - used for refreshing access tokens
+message RefreshTokenRequest {
+  string refresh_token = 1;
+}
+
+// Refresh token response message - returned after successful token refresh
+message RefreshTokenResponse {
+  string access_token = 1;
+}
