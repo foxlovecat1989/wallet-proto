@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"user-svc/internal/app/domains/models"
-	"user-svc/internal/db"
+	"user-svc/db"
 
 	"github.com/samber/lo"
 )

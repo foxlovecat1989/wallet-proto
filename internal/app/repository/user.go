@@ -7,7 +7,7 @@ import (
 
 	"user-svc/internal/app/domains/errs"
 	"user-svc/internal/app/domains/models"
-	"user-svc/internal/db"
+	"user-svc/db"
 	"user-svc/pkg/utils/tx"
 
 	"github.com/google/uuid"

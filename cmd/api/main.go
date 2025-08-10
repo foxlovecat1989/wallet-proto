@@ -16,7 +16,7 @@ import (
 	"user-svc/internal/app/handler"
 	"user-svc/internal/app/repository"
 	"user-svc/internal/app/service"
-	"user-svc/internal/db"
+	"user-svc/db"
 	"user-svc/internal/workers"
 	"user-svc/pkg/utils/crypt/token"
 	grpcutils "user-svc/pkg/utils/grpc"
