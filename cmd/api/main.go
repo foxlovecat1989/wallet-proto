@@ -12,12 +12,13 @@ import (
 	"time"
 
 	pb "user-svc/api/proto"
+	"user-svc/db"
 	"user-svc/internal/app/config"
 	"user-svc/internal/app/handler"
 	"user-svc/internal/app/repository"
 	"user-svc/internal/app/service"
-	"user-svc/db"
 	"user-svc/internal/workers"
+	"user-svc/pkg/migrate"
 	"user-svc/pkg/utils/crypt/token"
 	grpcutils "user-svc/pkg/utils/grpc"
 	logutils "user-svc/pkg/utils/log"
@@ -46,6 +47,25 @@ func main() {
 	if err := cfg.Validate(); err != nil {
 		logger.Fatalf("Configuration validation failed: %v", err)
 	}
+
+	// Run database migrations
+	databaseURL := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
+		cfg.Database.User,
+		cfg.Database.Password,
+		cfg.Database.Host,
+		cfg.Database.Port,
+		cfg.Database.DBName,
+	)
+
+	migrationConfig := migrate.Config{
+		DatabaseURL:    databaseURL,
+		MigrationsPath: "./db/migrations",
+	}
+
+	if err := migrate.RunMigrations(migrationConfig); err != nil {
+		logger.Fatalf("Failed to run database migrations: %v", err)
+	}
+	logger.Info("Database migrations completed successfully")
 
 	// Get interceptors for exception handling
 	unaryInterceptors := grpcutils.GetUnaryInterceptors(logger)

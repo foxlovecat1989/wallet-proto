@@ -1,6 +1,6 @@
 # Makefile for user-svc
 
-.PHONY: all build test clean run proto help
+.PHONY: all build test clean run proto help migrate migrate-up migrate-down migrate-status migrate-create
 
 # Default target
 all: build
@@ -87,6 +87,55 @@ docker-clean:
 	docker system prune -f
 	@echo "Docker cleanup completed!"
 
+# Migration commands
+migrate: build-migrate
+	@echo "Building migration tool..."
+
+build-migrate:
+	@echo "Building migration tool..."
+	@mkdir -p bin
+	go build -o bin/migrate ./cmd/migrate
+
+migrate-up: build-migrate
+	@echo "Running database migrations..."
+	@if [ -z "$(DATABASE_URL)" ]; then \
+		echo "Error: DATABASE_URL environment variable is required"; \
+		echo "Example: DATABASE_URL=postgres://user:pass@localhost:5432/dbname?sslmode=disable make migrate-up"; \
+		exit 1; \
+	fi
+	./bin/migrate -database "$(DATABASE_URL)" -action up
+
+migrate-down: build-migrate
+	@echo "Rolling back database migrations..."
+	@if [ -z "$(DATABASE_URL)" ]; then \
+		echo "Error: DATABASE_URL environment variable is required"; \
+		echo "Example: DATABASE_URL=postgres://user:pass@localhost:5432/dbname?sslmode=disable make migrate-down STEPS=1"; \
+		exit 1; \
+	fi
+	./bin/migrate -database "$(DATABASE_URL)" -action down -steps $(or $(STEPS),1)
+
+migrate-status: build-migrate
+	@echo "Checking migration status..."
+	@if [ -z "$(DATABASE_URL)" ]; then \
+		echo "Error: DATABASE_URL environment variable is required"; \
+		echo "Example: DATABASE_URL=postgres://user:pass@localhost:5432/dbname?sslmode=disable make migrate-status"; \
+		exit 1; \
+	fi
+	./bin/migrate -database "$(DATABASE_URL)" -action status
+
+migrate-create:
+	@echo "Creating new migration file..."
+	@if [ -z "$(NAME)" ]; then \
+		echo "Error: NAME environment variable is required"; \
+		echo "Example: NAME=add_user_profile make migrate-create"; \
+		exit 1; \
+	fi
+	@timestamp=$$(date +%s); \
+	filename="db/migrations/$${timestamp}_$(NAME)"; \
+	touch "$${filename}.up.sql"; \
+	touch "$${filename}.down.sql"; \
+	echo "Created migration files: $${filename}.up.sql and $${filename}.down.sql"
+
 # Show help
 help:
 	@echo "Available targets:"
@@ -99,6 +148,11 @@ help:
 	@echo "  dev          - Start database and server for development"
 	@echo "  test-all     - Test all gRPC endpoints"
 	@echo "  proto        - Update submodule and generate proto files"
+	@echo "  migrate      - Build migration tool"
+	@echo "  migrate-up   - Run all pending migrations"
+	@echo "  migrate-down - Rollback migrations (use STEPS=N to specify number)"
+	@echo "  migrate-status - Check current migration status"
+	@echo "  migrate-create - Create new migration files (use NAME=migration_name)"
 	@echo "  docker-build - Build Docker image"
 	@echo "  docker-run   - Run Docker container"
 	@echo "  docker-up    - Start all services with docker-compose"
